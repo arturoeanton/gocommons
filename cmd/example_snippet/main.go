@@ -59,8 +59,8 @@ func main() {
 	fmt.Println(bl.Contains("HelloWorld."))
 
 	fmt.Println("------------------------------------------------------")
+	bl.Add(456)
 	l, _ := bl.Add(456)
-	l, _ = bl.Add(456)
 	fmt.Println(l, "-", bl.Count(456), "-", bl.Contains(456))
 	l = bl.Remove(456)
 	fmt.Println(l, "-", bl.Count(456), "-", bl.Contains(456))
