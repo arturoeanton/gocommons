@@ -5,9 +5,8 @@ Select * from test
 --name: test2 
 --var:id
 --var:name
---type:int
---var:age=14
---var:text  =Hola como estas 1 = 1
+--var:age:number=14
+--var:text:string=Hola como estas 1 = 1
 Select * 
 from test
 where 

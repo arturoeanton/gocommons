@@ -3,9 +3,8 @@ package snippet
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
-	"strconv"
+	"reflect"
 	"strings"
 	"text/template"
 )
@@ -72,7 +71,6 @@ func (s *Snippets) parce(lineTmp, field string) (string, bool) {
 
 func (s *Snippets) Load(scanner *bufio.Scanner) *Snippets {
 	key := ""
-	varType := "string"
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineTmp := strings.ReplaceAll(line, " ", "")
@@ -97,16 +95,19 @@ func (s *Snippets) Load(scanner *bufio.Scanner) *Snippets {
 			if i > 0 {
 				value = line[i+1:]
 			}
-			s.snippet[key].Vars[varKey] = &Var{Key: varKey, Value: value, Type: varType}
+			nameSplit := strings.Split(varKey, ":")
+			varName := nameSplit[0]
+			varType := "string"
+			if len(nameSplit) > 1 {
+				varType = nameSplit[1]
+			}
+			if varType == "float" {
+				varType = "float64"
+			}
+			s.snippet[key].Vars[varName] = &Var{Key: varName, Value: value, Type: varType}
 			continue
 		}
 
-		val, flag = s.parce(lineTmp, "type")
-		if flag {
-			varType = val
-			continue
-		}
-		varType = "string"
 		s.snippet[key].Text += line + "\n"
 	}
 	return s
@@ -123,26 +124,16 @@ func (q *Snippet) Escape(f func(string) string) *Snippet {
 
 func (q *Snippet) Param(key string, value interface{}) *Snippet {
 	str := fmt.Sprint(value)
-	if q.Vars[key].Type == "int" {
-		if _, err := strconv.Atoi(str); err != nil {
-			log.Println(err)
-			panic(err)
-		}
-	}
-	if q.Vars[key].Type == "float" {
-		if _, err := strconv.ParseFloat(str, 64); err != nil {
-			log.Println(err)
-			panic(err)
-		}
-	}
-	if q.Vars[key].Type == "bool" {
-		if _, err := strconv.ParseBool(str); err != nil {
-			log.Println(err)
-			panic(err)
-		}
+	typeParamName := reflect.TypeOf(value).Name()
+	if q.Vars[key].Type != typeParamName &&
+		(q.Vars[key].Type == "number" && !(strings.HasPrefix(typeParamName, "int") ||
+			strings.HasPrefix(typeParamName, "uint") ||
+			strings.HasPrefix(typeParamName, "float"))) {
+		panic(fmt.Sprintf("Type of param %s is %s and it must  be not %s", key, typeParamName, q.Vars[key].Type))
 	}
 	q.Vars[key].Value = str
 	return q
+
 }
 
 func (q *Snippet) Get() string {

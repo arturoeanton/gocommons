@@ -30,7 +30,7 @@ func main() {
 		qt.
 			Param("id", "hola").
 			Param("name", "Elias\"--").
-			Param("age", 41).
+			Param("age", 4.1).
 			Get(),
 	)
 	fmt.Println(hash.HashStringUint64("HelloWorld"))
