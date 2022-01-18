@@ -24,70 +24,96 @@ type Snippet struct {
 	FxEscape func(string) string
 }
 type Snippets struct {
-	snippet map[string]*Snippet
-	file    string
+	snippet  map[string]*Snippet
+	comment  string
+	fxEscape func(string) string
 }
 
-func LoadFileComment(name string, comment string, fxEscape func(string) string) *Snippets {
-	snippet := make(map[string]*Snippet)
+func NewSnippetStorage() *Snippets {
+	return &Snippets{
+		snippet:  make(map[string]*Snippet),
+		comment:  "--",
+		fxEscape: template.HTMLEscapeString,
+	}
+}
+func (s *Snippets) Comment(comment string) *Snippets {
+	s.comment = comment
+	return s
+}
 
+func (s *Snippets) Escape(fx func(string) string) *Snippets {
+	s.fxEscape = fx
+	return s
+}
+
+func (s *Snippets) LoadFile(name string) *Snippets {
 	file, err := os.Open(name)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
-
 	scanner := bufio.NewScanner(file)
+	return s.Load(scanner)
+}
+
+func (s *Snippets) LoadString(code string, fxEscape func(string) string) *Snippets {
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	return s.Load(scanner)
+}
+
+func (s *Snippets) parce(lineTmp, field string) (string, bool) {
+	selectorPrefix := s.comment + field + ":"
+	if len(lineTmp) > 0 && strings.HasPrefix(lineTmp, selectorPrefix) {
+		key := strings.TrimPrefix(lineTmp, selectorPrefix)
+		return key, true
+	}
+	return "", false
+}
+
+func (s *Snippets) Load(scanner *bufio.Scanner) *Snippets {
 	key := ""
 	varType := "string"
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineTmp := strings.ReplaceAll(line, " ", "")
-		if len(lineTmp) > 0 && strings.HasPrefix(lineTmp, comment+"name:") {
-			key = strings.TrimPrefix(lineTmp, comment+"name:")
-			snippet[key] = &Snippet{Name: key, Type: "", Text: "", Vars: make(map[string]*Var), FxEscape: fxEscape}
+
+		val, flag := s.parce(lineTmp, "name")
+		if flag {
+			key = val
+			s.snippet[key] = &Snippet{Name: key, Type: "", Text: "", Vars: make(map[string]*Var), FxEscape: s.fxEscape}
 			continue
 		}
+
 		if key == "" {
 			continue
 		}
-		if len(lineTmp) > 0 && strings.HasPrefix(lineTmp, comment+"type:") {
-			snippet[key].Type = strings.TrimPrefix(lineTmp, comment+"type:")
+
+		val, flag = s.parce(lineTmp, "var")
+		if flag {
+			split := strings.Split(val, "=")
+			varKey := strings.ReplaceAll(split[0], " ", "")
+			i := strings.Index(line, "=")
+			value := ""
+			if i > 0 {
+				value = line[i+1:]
+			}
+			s.snippet[key].Vars[varKey] = &Var{Key: varKey, Value: value, Type: varType}
 			continue
 		}
-		if len(lineTmp) > 0 && strings.HasPrefix(lineTmp, comment+"var:") {
-			value := strings.Split(strings.TrimPrefix(lineTmp, comment+"var:"), "=")
-			if len(value) >= 2 {
-				value[1] = strings.Split(strings.TrimPrefix(line, comment+"var:"), value[0]+"=")[1]
-			}
-			if len(value) == 1 {
-				value = append(value, "")
-			}
-			snippet[key].Vars[value[0]] = &Var{Key: value[0], Value: value[1], Type: varType}
-			continue
-		}
-		if len(lineTmp) > 0 && strings.HasPrefix(lineTmp, comment+"var_type:") {
-			varType = strings.TrimPrefix(lineTmp, comment+"var_type:")
+
+		val, flag = s.parce(lineTmp, "type")
+		if flag {
+			varType = val
 			continue
 		}
 		varType = "string"
-		snippet[key].Text += line + "\n"
+		s.snippet[key].Text += line + "\n"
 	}
-
-	//fmt.Println(Snippet)
-
-	return &Snippets{
-		snippet: snippet,
-		file:    name,
-	}
+	return s
 }
 
-func LoadFile(name string) *Snippets {
-	return LoadFileComment(name, "--", template.HTMLEscapeString)
-}
-
-func (g *Snippets) GetSnippet(name string) Snippet {
-	return *g.snippet[name]
+func (s *Snippets) GetSnippet(name string) Snippet {
+	return *s.snippet[name]
 }
 
 func (q *Snippet) Escape(f func(string) string) *Snippet {
@@ -96,46 +122,39 @@ func (q *Snippet) Escape(f func(string) string) *Snippet {
 }
 
 func (q *Snippet) Param(key string, value interface{}) *Snippet {
-
 	str := fmt.Sprint(value)
 	if q.Vars[key].Type == "int" {
 		if _, err := strconv.Atoi(str); err != nil {
 			log.Println(err)
-			value = ""
+			panic(err)
 		}
 	}
 	if q.Vars[key].Type == "float" {
 		if _, err := strconv.ParseFloat(str, 64); err != nil {
 			log.Println(err)
-			value = ""
+			panic(err)
 		}
 	}
 	if q.Vars[key].Type == "bool" {
 		if _, err := strconv.ParseBool(str); err != nil {
 			log.Println(err)
-			value = ""
+			panic(err)
 		}
 	}
-	/*
-		if q.Vars[key].Type == "string" {
-
-		}
-	*/
-
 	q.Vars[key].Value = str
 	return q
-
 }
 
 func (q *Snippet) Get() string {
 	t := q.Text
 	flagEscape := q.FxEscape != nil
 	for k, v := range q.Vars {
+		literal := "${{" + k + "}}"
 		if flagEscape {
-			t = strings.ReplaceAll(t, "${{"+k+"}}", q.FxEscape(v.Value))
+			t = strings.ReplaceAll(t, literal, q.FxEscape(v.Value))
 			continue
 		}
-		t = strings.ReplaceAll(t, "${{"+k+"}}", v.Value)
+		t = strings.ReplaceAll(t, literal, v.Value)
 	}
 	return t
 }
