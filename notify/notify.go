@@ -3,7 +3,7 @@ package notify
 import (
 	"log"
 
-	"github.com/arturoeanton/go-server-feature-manager/pkg/utils"
+	"github.com/arturoeanton/gocommons/utils"
 	"github.com/fsnotify/fsnotify"
 )
 
