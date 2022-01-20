@@ -28,6 +28,11 @@ func FileToString(name string) (string, error) {
 	return string(content), err
 }
 
+func FileToString_(name string) string {
+	content, _ := ioutil.ReadFile(name)
+	return string(content)
+}
+
 func StringToFile(filenanme string, content string) error {
 	d1 := []byte(content)
 	err := ioutil.WriteFile(filenanme, d1, 0644)
